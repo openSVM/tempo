@@ -3,9 +3,8 @@ use crate::provider::{Ed25519Provider, PublicKey};
 use crate::types::{Address, ProposalPart, Value, ValueId};
 use malachitebft_core_types::{
     Address as MalachiteAddress, Context, Extension as MalachiteExtension, NilOrVal,
-    Proposal as MalachiteProposal, Round, SignedMessage,
-    Validator as MalachiteValidator, ValidatorSet as MalachiteValidatorSet,
-    Vote as MalachiteVote, VoteType,
+    Proposal as MalachiteProposal, Round, SignedMessage, Validator as MalachiteValidator,
+    ValidatorSet as MalachiteValidatorSet, Vote as MalachiteVote, VoteType,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -68,7 +67,6 @@ impl Display for BasePeerAddress {
 }
 
 impl MalachiteAddress for BasePeerAddress {}
-
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct BaseProposal {
@@ -150,7 +148,6 @@ impl MalachiteValidatorSet<MalachiteContext> for BasePeerSet {
         self.peers.get(idx)
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BaseVote {

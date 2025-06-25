@@ -2,8 +2,8 @@
 
 use crate::codec::{decode_commit_certificate, encode_commit_certificate, ProtoCodec};
 use crate::context::MalachiteContext;
-use crate::Value;
 use crate::height::Height;
+use crate::Value;
 use malachitebft_app_channel::app::types::ProposedValue;
 use malachitebft_codec::Codec;
 use malachitebft_core_types::{CommitCertificate, Round};

@@ -1,12 +1,10 @@
-use crate::context::{
-    BasePeerAddress, BasePeerSet, MalachiteContext,
-};
-use crate::{ProposalPart, Value};
+use crate::context::{BasePeerAddress, BasePeerSet, MalachiteContext};
 use crate::height::Height;
 use crate::provider::Ed25519Provider;
 use crate::store::Store;
 use crate::types::Address;
 use crate::utils::seed_from_address;
+use crate::{ProposalPart, Value};
 use bytes::Bytes;
 use eyre::Result;
 use malachitebft_app_channel::app::streaming::StreamMessage;

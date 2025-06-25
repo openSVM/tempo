@@ -1,10 +1,10 @@
 //! Codec implementations for Malachite consensus messages
 
 use crate::context::{BasePeerAddress, MalachiteContext};
-use crate::{ProposalPart, Value};
 use crate::height::Height;
 use crate::proto;
 use crate::{Address, ValueId};
+use crate::{ProposalPart, Value};
 use bytes::Bytes;
 use malachitebft_app::engine::util::streaming::StreamMessage;
 use malachitebft_codec::Codec;
@@ -193,7 +193,9 @@ pub fn encode_commit_certificate(
             .as_u32()
             .ok_or_else(|| ProtoError::Other("Round is nil, cannot encode".to_string()))?,
         value_id: Some(proto::ValueId {
-            value: Some(Bytes::from(certificate.value_id.as_u64().to_be_bytes().to_vec())),
+            value: Some(Bytes::from(
+                certificate.value_id.as_u64().to_be_bytes().to_vec(),
+            )),
         }),
         signatures: certificate
             .commit_signatures
@@ -217,7 +219,9 @@ pub fn decode_commit_certificate(
     Ok(CommitCertificate {
         height: Height(proto.height),
         round: Round::new(proto.round),
-        value_id: ValueId::new(u64::from_be_bytes(value_id_bytes[..8].try_into().unwrap_or([0u8; 8]))),
+        value_id: ValueId::new(u64::from_be_bytes(
+            value_id_bytes[..8].try_into().unwrap_or([0u8; 8]),
+        )),
         commit_signatures: proto
             .signatures
             .into_iter()
