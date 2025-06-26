@@ -1,106 +1,165 @@
-use clap::{Args, Parser};
+//! Main executable for the Reth-Malachite node.
+//!
+//! This binary launches a blockchain node that combines:
+//! - Reth's execution layer for transaction processing and state management
+//! - Malachite's BFT consensus engine for block agreement
+//!
+//! The node operates by:
+//! 1. Starting the Reth node infrastructure (database, networking, RPC)
+//! 2. Creating the application state that bridges Reth and Malachite
+//! 3. Launching the Malachite consensus engine
+//! 4. Running both components until shutdown
+//!
+//! Configuration can be provided via command-line arguments or configuration files.
+
+use clap::Parser;
 use reth::builder::NodeHandle;
 use reth_malachite::{
     app::{node::RethNode, Config, Genesis, State, ValidatorInfo},
-    cli::{Cli, MalachiteChainSpecParser},
+    cli::{Cli, MalachiteArgs, MalachiteChainSpecParser},
     consensus::{start_consensus_engine, EngineConfig},
     context::MalachiteContext,
     store::tables::Tables,
     types::Address,
 };
-use std::{path::PathBuf, sync::Arc};
-
-/// No Additional arguments
-#[derive(Debug, Clone, Copy, Default, Args)]
-#[non_exhaustive]
-struct NoArgs;
+use std::{fs, sync::Arc};
 
 fn main() -> eyre::Result<()> {
     reth_cli_util::sigsegv_handler::install();
 
-    // Create the context and initial state
-    let ctx = MalachiteContext::default();
-    let config = Config::new();
+    Cli::<MalachiteChainSpecParser, MalachiteArgs>::parse().run(
+        |builder, args: MalachiteArgs| async move {
+            // Create the context
+            let ctx = MalachiteContext::default();
 
-    // Create a genesis with initial validators
-    let validator_address = Address::new([1; 20]);
-    let validator_info = ValidatorInfo::new(validator_address, 1000, vec![0; 32]);
-    let genesis = Genesis::new("1".to_string()).with_validators(vec![validator_info]);
+            // Load configuration from file if provided, otherwise use defaults
+            let config = if args.consensus_config.is_some() && args.config_file().exists() {
+                // TODO: Implement config file loading
+                tracing::info!("Loading config from: {:?}", args.config_file());
+                Config::new()
+            } else {
+                Config::new()
+            };
 
-    // Create the node address (in production, derive from public key)
-    let address = Address::new([0; 20]);
+            // Load genesis from file if provided, otherwise use default
+            let genesis = if args.genesis.is_some() && args.genesis_file().exists() {
+                // TODO: Implement genesis file loading
+                tracing::info!("Loading genesis from: {:?}", args.genesis_file());
+                // For now, create a default genesis
+                let validator_address = Address::new([1; 20]);
+                let validator_info = ValidatorInfo::new(validator_address, 1000, vec![0; 32]);
+                Genesis::new(args.chain_id()).with_validators(vec![validator_info])
+            } else {
+                // Create a default genesis with initial validators
+                let validator_address = Address::new([1; 20]);
+                let validator_info = ValidatorInfo::new(validator_address, 1000, vec![0; 32]);
+                Genesis::new(args.chain_id()).with_validators(vec![validator_info])
+            };
 
-    Cli::<MalachiteChainSpecParser, NoArgs>::parse().run(|builder, _: NoArgs| async move {
-        // Launch the Reth node first to get the engine handle
-        let reth_node = RethNode::new();
-        let NodeHandle {
-            node,
-            node_exit_future,
-        } = builder
-            .node(reth_node)
-            .apply(|mut ctx| {
-                // Access the database before launch to create tables
-                let db = ctx.db_mut();
-                if let Err(e) = db.create_tables_for::<Tables>() {
-                    tracing::error!("Failed to create consensus tables: {:?}", e);
-                } else {
-                    tracing::info!("Created consensus tables successfully");
-                }
-                ctx
-            })
-            .launch()
+            // Load validator key to derive node address if provided
+            let address = if args.validator_key.is_some() && args.validator_key_file().exists() {
+                // TODO: Load validator key and derive address
+                tracing::info!(
+                    "Loading validator key from: {:?}",
+                    args.validator_key_file()
+                );
+                Address::new([0; 20])
+            } else {
+                Address::new([0; 20])
+            };
+            // Launch the Reth node first to get the engine handle
+            let reth_node = RethNode::new();
+            let NodeHandle {
+                node,
+                node_exit_future,
+            } = builder
+                .node(reth_node)
+                .apply(|mut ctx| {
+                    // Access the database before launch to create tables
+                    let db = ctx.db_mut();
+                    if let Err(e) = db.create_tables_for::<Tables>() {
+                        tracing::error!("Failed to create consensus tables: {:?}", e);
+                    } else {
+                        tracing::info!("Created consensus tables successfully");
+                    }
+                    ctx
+                })
+                .launch()
+                .await?;
+
+            // Get the beacon engine handle
+            let app_handle = node.add_ons_handle.beacon_engine_handle.clone();
+
+            // Get the payload builder handle
+            let payload_builder_handle = node.payload_builder_handle.clone();
+
+            // Get the provider from the node
+            let provider = node.provider.clone();
+
+            // Create the application state using the factory method
+            // This encapsulates Store creation and verification
+            let state = State::from_provider(
+                ctx.clone(),
+                config,
+                genesis.clone(),
+                address,
+                Arc::new(provider),
+                app_handle,
+                payload_builder_handle,
+            )
             .await?;
 
-        // Get the beacon engine handle
-        let app_handle = node.add_ons_handle.beacon_engine_handle.clone();
+            tracing::info!("Application state created successfully");
 
-        // Get the payload builder handle
-        let payload_builder_handle = node.payload_builder_handle.clone();
+            // Get the home directory from args
+            let home_dir = args.home_dir();
 
-        // Get the provider from the node
-        let provider = node.provider.clone();
+            // Create necessary directories
+            fs::create_dir_all(&home_dir)?;
+            fs::create_dir_all(home_dir.join("config"))?;
+            fs::create_dir_all(home_dir.join("data"))?;
 
-        // Create the application state using the factory method
-        // This encapsulates Store creation and verification
-        let state = State::from_provider(
-            ctx.clone(),
-            config,
-            genesis.clone(),
-            address,
-            Arc::new(provider),
-            app_handle,
-            payload_builder_handle,
-        )
-        .await?;
+            // Create Malachite consensus engine configuration
+            let config_file_path = args.config_file();
+            tracing::info!("Checking for Malachite config at: {:?}", config_file_path);
 
-        tracing::info!("Application state created successfully");
+            let engine_config = if config_file_path.exists() {
+                tracing::info!("Loading Malachite config from: {:?}", config_file_path);
+                // Load from config file
+                reth_malachite::consensus::config_loader::load_engine_config(
+                    &config_file_path,
+                    args.chain_id(),
+                    args.node_id(),
+                )?
+            } else {
+                // Use defaults
+                EngineConfig::new(args.chain_id(), args.node_id(), "127.0.0.1:26657".parse()?)
+            };
 
-        // Get the home directory
-        let home_dir = PathBuf::from("./data"); // In production, use proper data dir
+            tracing::info!(
+                "Starting Malachite consensus engine with chain_id={}, node_id={}, home_dir={:?}",
+                args.chain_id(),
+                args.node_id(),
+                home_dir
+            );
 
-        // Create Malachite consensus engine configuration
-        let engine_config = EngineConfig::new(
-            "reth-malachite-1".to_string(),
-            "node-0".to_string(),
-            "127.0.0.1:26657".parse()?,
-        );
+            // Start the Malachite consensus engine
+            let consensus_handle = start_consensus_engine(state, engine_config, home_dir).await?;
 
-        // Start the Malachite consensus engine
-        let consensus_handle = start_consensus_engine(state, engine_config, home_dir).await?;
-
-        // Wait for the node to exit
-        tokio::select! {
-            _ = node_exit_future => {
-                tracing::info!("Reth node exited");
+            // Wait for the node to exit
+            tokio::select! {
+                _ = node_exit_future => {
+                    tracing::info!("Reth node exited");
+                }
+                _ = consensus_handle.app => {
+                    tracing::info!("Consensus engine exited");
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    tracing::info!("Received shutdown signal");
+                }
             }
-            _ = consensus_handle.app => {
-                tracing::info!("Consensus engine exited");
-            }
-            _ = tokio::signal::ctrl_c() => {
-                tracing::info!("Received shutdown signal");
-            }
-        }
 
-        Ok(())
-    })
+            Ok(())
+        },
+    )
 }
