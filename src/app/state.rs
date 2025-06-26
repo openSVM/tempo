@@ -161,6 +161,7 @@ impl State {
         store: Store,
         engine_handle: BeaconConsensusEngineHandle<<EthereumNode as NodeTypes>::Payload>,
         payload_builder_handle: PayloadBuilderHandle<<EthereumNode as NodeTypes>::Payload>,
+        signing_provider: Option<Ed25519Provider>,
     ) -> Self {
         let payload_store = Arc::new(PayloadStore::new(payload_builder_handle));
 
@@ -170,7 +171,7 @@ impl State {
             genesis,
             address,
             store,
-            signing_provider: Ed25519Provider::new_test(),
+            signing_provider: signing_provider.unwrap_or_else(Ed25519Provider::new_test),
             engine_handle,
             payload_store,
             current_height: Arc::new(RwLock::new(Height::default())),
@@ -195,6 +196,7 @@ impl State {
         provider: Arc<P>,
         engine_handle: BeaconConsensusEngineHandle<<EthereumNode as NodeTypes>::Payload>,
         payload_builder_handle: PayloadBuilderHandle<<EthereumNode as NodeTypes>::Payload>,
+        signing_provider: Option<Ed25519Provider>,
     ) -> Result<Self>
     where
         P: reth_provider::DatabaseProviderFactory + Clone + Unpin + Send + Sync + 'static,
@@ -213,6 +215,7 @@ impl State {
             store,
             engine_handle,
             payload_builder_handle,
+            signing_provider,
         ))
     }
 
