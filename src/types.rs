@@ -1,3 +1,17 @@
+//! Core types used throughout the Reth-Malachite integration.
+//!
+//! This module defines fundamental types that bridge between Reth's blockchain
+//! types and Malachite's consensus types. These types handle the representation
+//! of addresses, blocks as consensus values, and proposal structures.
+//!
+//! # Key Types
+//!
+//! - [`Address`]: A 20-byte Ethereum-style address
+//! - [`Value`]: Wraps a Reth block as the consensus value
+//! - [`ValueId`]: Unique identifier for values (block hash)
+//! - [`ProposalPart`]: Components of a consensus proposal
+//! - Various proposal-related types for the consensus protocol
+
 use alloy_primitives::B256;
 use bytes::Bytes;
 use malachitebft_core_types::Round;

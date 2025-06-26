@@ -1,3 +1,17 @@
+//! Malachite consensus context implementation.
+//!
+//! This module provides the context implementation required by Malachite consensus,
+//! defining all the associated types and trait implementations needed to run the
+//! consensus protocol. It acts as the main bridge between Malachite's generic
+//! consensus implementation and our specific blockchain types.
+//!
+//! # Key Components
+//!
+//! - [`MalachiteContext`]: The main context type implementing Malachite's `Context` trait
+//! - [`BasePeer`], [`BasePeerSet`], [`BasePeerAddress`]: Types for consensus participants
+//! - [`BaseProposal`], [`BaseVote`], [`BaseExtension`]: Consensus message types
+//! - Wrapper types for Malachite core types to add required trait implementations
+
 use crate::{
     height::Height,
     provider::{Ed25519Provider, PublicKey},

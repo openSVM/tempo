@@ -1,3 +1,9 @@
+//! Utility functions for the Reth-Malachite node.
+//!
+//! This module provides helper functions used across the codebase, primarily
+//! for generating deterministic random seeds based on node addresses and
+//! instance identifiers.
+
 use crate::types::Address;
 
 /// Make up a seed for the rng based on our address and instance id.

@@ -1,3 +1,9 @@
+//! Blockchain height type for Malachite consensus.
+//!
+//! This module provides a height type that represents the current blockchain height
+//! and implements the Malachite `Height` trait. Heights are zero-indexed internally
+//! but the initial height for consensus is 1.
+
 use core::fmt;
 use malachitebft_core_types::Height as MalachiteHeight;
 use serde::{Deserialize, Serialize};
