@@ -177,6 +177,7 @@ for ((i=0; i<$NUM_NODES; i++)); do
         --authrpc.port $((AUTH_RPC_PORT_BASE + i)) \
         --metrics $((METRICS_PORT_BASE + i)) \
         --log.file.directory "$NODE_DIR/logs" \
+        --ipcdisable \
         --malachite-home "$NODE_DIR/malachite" \
         --consensus-config "$NODE_DIR/malachite/config/malachite.toml" \
         --validator-key "$NODE_DIR/malachite/config/priv_validator_key.json" \
