@@ -10,7 +10,7 @@
 
 - name: Install required packages
   apt:
-    name:
+    pkg:
       - ufw
       - unzip
     state: present
@@ -18,19 +18,19 @@
   become: yes
 
 - name: Set UFW default incoming policy to deny
-  ufw:
+  community.general.ufw:
     direction: incoming
     policy: deny
   become: yes
 
 - name: Set UFW default outgoing policy to allow
-  ufw:
+  community.general.ufw:
     direction: outgoing
     policy: allow
   become: yes
 
 - name: Allow all traffic on tailscale0 interface
-  ufw:
+  community.general.ufw:
     rule: allow
     interface: tailscale0
     direction: in
@@ -39,6 +39,6 @@
   become: yes
 
 - name: Enable UFW
-  ufw:
+  community.general.ufw:
     state: enabled
   become: yes

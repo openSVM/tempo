@@ -11,3 +11,5 @@ collections:
   # Grafana collection for monitoring setup
   - name: grafana.grafana
     version: ">=6.0.0"
+  - name: community.general
+    version: ">=10.7.0"
