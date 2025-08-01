@@ -6,6 +6,12 @@
     daemon_reload: yes
   become: yes
 
+- name: Reset the network if needed
+  file:
+    path: "{{ ansible_env.HOME }}/malachite"
+    state: absent
+  when: tempo_force_reset
+
 - name: Check if validator key exists
   stat:
     path: "{{ ansible_env.HOME }}/malachite/config/priv_validator_key.json"
@@ -13,7 +19,10 @@
 
 - name: Include key generation tasks
   include_tasks: keygen.yml
-  when: not validator_key_stat.stat.exists
+  when: not validator_key_stat.stat.exists or tempo_force_reset
+
+- name: Include discovery key generation tasks
+  include_tasks: disc_keygen.yml
 
 - name: Include installation tasks
   include_tasks: install.yml
