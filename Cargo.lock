@@ -11997,6 +11997,7 @@ dependencies = [
  "criterion",
  "eyre",
  "reth-evm",
+ "reth-storage-api",
  "tracing",
 ]
 
@@ -12043,14 +12044,20 @@ dependencies = [
 name = "tempo-transaction-pool"
 version = "0.1.0"
 dependencies = [
+ "alloy",
  "alloy-consensus",
  "alloy-eips",
  "alloy-primitives",
+ "futures",
  "reth-chainspec",
  "reth-ethereum-primitives",
+ "reth-evm",
  "reth-primitives-traits",
+ "reth-provider",
  "reth-storage-api",
  "reth-transaction-pool",
+ "tempo-precompiles",
+ "tokio",
 ]
 
 [[package]]
