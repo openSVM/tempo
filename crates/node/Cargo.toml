@@ -14,7 +14,6 @@ workspace = true
 tempo-alloy = { workspace = true, features = ["tempo-compat"] }
 tempo-evm = { workspace = true, features = ["rpc"] }
 tempo-transaction-pool.workspace = true
-tempo-faucet.workspace = true
 tempo-chainspec.workspace = true
 tempo-consensus.workspace = true
 tempo-payload-builder.workspace = true
@@ -49,7 +48,6 @@ alloy.workspace = true
 alloy-primitives.workspace = true
 
 async-trait.workspace = true
-clap.workspace = true
 eyre.workspace = true
 tokio.workspace = true
 serde.workspace = true
