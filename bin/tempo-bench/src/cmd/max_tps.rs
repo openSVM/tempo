@@ -18,21 +18,17 @@ use alloy::{
     network::{ReceiptResponse, TransactionBuilder, TxSignerSync},
     primitives::{Address, B256, BlockNumber, U256},
     providers::{
-        DynProvider, PendingTransactionBuilder, PendingTransactionError, Provider, ProviderBuilder,
-        SendableTx, WatchTxError, fillers::TxFiller,
+        PendingTransactionBuilder, PendingTransactionError, Provider, ProviderBuilder, SendableTx,
+        WatchTxError,
     },
     rpc::client::NoParams,
-    signers::local::{
-        PrivateKeySigner,
-        coins_bip39::{English, Mnemonic, MnemonicError},
-    },
+    signers::local::coins_bip39::{English, Mnemonic, MnemonicError},
     transports::http::reqwest::Url,
 };
 use clap::Parser;
 use eyre::{Context, OptionExt, ensure};
 use futures::{
     FutureExt, StreamExt, TryStreamExt,
-    future::BoxFuture,
     stream::{self},
 };
 use governor::{Quota, RateLimiter, state::StreamRateLimitExt};
@@ -54,16 +50,12 @@ use std::{
     time::Duration,
 };
 use tempo_contracts::precompiles::{
-    IFeeManager::IFeeManagerInstance,
-    IRolesAuth,
-    IStablecoinExchange::IStablecoinExchangeInstance,
-    ITIP20::{self, ITIP20Instance},
-    ITIP20Factory, STABLECOIN_EXCHANGE_ADDRESS, TIP20_FACTORY_ADDRESS,
+    IFeeManager::IFeeManagerInstance, IStablecoinExchange::IStablecoinExchangeInstance,
+    ITIP20::ITIP20Instance, STABLECOIN_EXCHANGE_ADDRESS,
 };
 use tempo_precompiles::{
     DEFAULT_FEE_TOKEN_PRE_ALLEGRETTO, TIP_FEE_MANAGER_ADDRESS,
     stablecoin_exchange::{MAX_TICK, MIN_ORDER_AMOUNT, MIN_TICK, TICK_SPACING},
-    tip20::{ISSUER_ROLE, token_id_to_address},
 };
 use tokio::{
     select,
@@ -71,7 +63,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::cmd::signer_providers::SignerProviderManager;
+use crate::cmd::signer_providers::{BenchProvider, SignerProviderManager};
 
 /// Run maximum TPS throughput benchmarking
 #[derive(Parser, Debug)]
@@ -157,6 +149,12 @@ pub struct MaxTpsArgs {
     /// Calls admin_clearTxpool.
     #[arg(long)]
     clear_txpool: bool,
+
+    /// Use 1D nonces instead of 2D nonces.
+    ///
+    /// It is recommended to use 2D nonces as they can't create nonce gaps.
+    #[arg(long)]
+    nonces_1d: bool,
 }
 
 impl MaxTpsArgs {
@@ -173,24 +171,38 @@ impl MaxTpsArgs {
         }
 
         info!(accounts = self.accounts, "Creating signers");
+        let nonces_1d = self.nonces_1d;
         let signer_provider_manager = SignerProviderManager::new(
             self.mnemonic.resolve(),
             self.from_mnemonic_index,
             accounts,
             self.target_urls.clone(),
-            Box::new(|target_url, _cached_nonce_manager| {
-                ProviderBuilder::new_with_network::<TempoNetwork>()
-                    .with_random_2d_nonces()
-                    .connect_http(target_url)
+            Box::new(move |target_url, cached_nonce_manager| {
+                if nonces_1d {
+                    Arc::new(
+                        ProviderBuilder::default()
+                            .fetch_chain_id()
+                            .with_gas_estimation()
+                            .with_nonce_management(cached_nonce_manager)
+                            .connect_http(target_url),
+                    )
+                } else {
+                    Arc::new(
+                        ProviderBuilder::new_with_network::<TempoNetwork>()
+                            .with_random_2d_nonces()
+                            .connect_http(target_url),
+                    )
+                }
             }),
             Box::new(|signer, target_url, cached_nonce_manager| {
-                ProviderBuilder::default()
-                    .fetch_chain_id()
-                    .with_gas_estimation()
-                    .with_nonce_management(cached_nonce_manager)
-                    .wallet(signer)
-                    .connect_http(target_url)
-                    .erased()
+                Arc::new(
+                    ProviderBuilder::default()
+                        .fetch_chain_id()
+                        .with_gas_estimation()
+                        .with_nonce_management(cached_nonce_manager)
+                        .wallet(signer)
+                        .connect_http(target_url),
+                )
             }),
         );
         let signer_providers = signer_provider_manager.signer_providers();
@@ -379,9 +391,9 @@ impl MnemonicArg {
 }
 
 /// Awaits pending transactions with up to `tps` per second and `max_concurrent_requests` simultaneous in-flight requests. Stops when `deadline` future resolves.
-async fn send_transactions<F: TxFiller<TempoNetwork> + 'static>(
+async fn send_transactions(
     transactions: Vec<Vec<u8>>,
-    signer_provider_manager: SignerProviderManager<F>,
+    signer_provider_manager: SignerProviderManager,
     max_concurrent_requests: usize,
     tps: u64,
     deadline: Sleep,
@@ -453,9 +465,7 @@ async fn send_transactions<F: TxFiller<TempoNetwork> + 'static>(
     transactions
 }
 
-async fn generate_transactions<F: TxFiller<TempoNetwork> + 'static>(
-    input: GenerateTransactionsInput<F>,
-) -> eyre::Result<Vec<Vec<u8>>> {
+async fn generate_transactions(input: GenerateTransactionsInput) -> eyre::Result<Vec<Vec<u8>>> {
     let GenerateTransactionsInput {
         total_txs,
         accounts,
@@ -618,7 +628,7 @@ async fn generate_transactions<F: TxFiller<TempoNetwork> + 'static>(
 
 /// Funds accounts from the faucet using `temp_fundAddress` RPC.
 async fn fund_accounts(
-    provider: &DynProvider<TempoNetwork>,
+    provider: &BenchProvider,
     addresses: &[Address],
     max_concurrent_requests: usize,
     max_concurrent_transactions: usize,
@@ -713,7 +723,7 @@ struct BenchmarkReport {
 }
 
 pub async fn generate_report(
-    provider: DynProvider<TempoNetwork>,
+    provider: BenchProvider,
     start_block: BlockNumber,
     end_block: BlockNumber,
     args: &MaxTpsArgs,
@@ -864,10 +874,10 @@ async fn assert_receipt<R: ReceiptResponse>(receipt: R) -> eyre::Result<()> {
     Ok(())
 }
 
-struct GenerateTransactionsInput<F: TxFiller<TempoNetwork>> {
+struct GenerateTransactionsInput {
     total_txs: u64,
     accounts: u64,
-    signer_provider_manager: SignerProviderManager<F>,
+    signer_provider_manager: SignerProviderManager,
     max_concurrent_requests: usize,
     tip20_weight: u64,
     place_order_weight: u64,
